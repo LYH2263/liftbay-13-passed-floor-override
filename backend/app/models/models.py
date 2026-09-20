@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -11,6 +11,8 @@ class Building(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True)
     floors: Mapped[int] = mapped_column(Integer)
+    # 允许同向但已过站的轿厢接驳：False 时保持现网的已过站扣分
+    allow_passed_pickup: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     cars: Mapped[list["ElevatorCar"]] = relationship(back_populates="building")
 
 

@@ -6,7 +6,12 @@ class BuildingOut(BaseModel):
     id: int
     name: str
     floors: int
+    allow_passed_pickup: bool
     model_config = {"from_attributes": True}
+
+
+class BuildingUpdate(BaseModel):
+    allow_passed_pickup: bool | None = None
 
 
 class CarOut(BaseModel):
