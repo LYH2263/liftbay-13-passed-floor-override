@@ -33,9 +33,12 @@ class ScoreResult:
 SAME_DIR_BONUS = 40.0
 IDLE_BONUS = 20.0
 DISTANCE_WEIGHT = 5.0
+PASSED_PENALTY = 15.0
 
 
-def score_car(car: CarState, call: CallRequest) -> ScoreResult:
+def score_car(
+    car: CarState, call: CallRequest, allow_passed_pickup: bool = False
+) -> ScoreResult:
     if car.load + call.passengers > car.capacity:
         return ScoreResult(car.car_id, -1e9, False, "轿厢满员")
 
@@ -50,16 +53,21 @@ def score_car(car: CarState, call: CallRequest) -> ScoreResult:
             score += SAME_DIR_BONUS
         elif car.direction == "down" and car.floor >= call.floor:
             score += SAME_DIR_BONUS
-        else:
-            score -= 15.0  # same dir but already passed
+        elif not allow_passed_pickup:
+            score -= PASSED_PENALTY  # same dir but already passed
+        # allow_passed_pickup=True: 同向已过站接驳，不扣这笔分
     else:
         score -= 25.0
 
     return ScoreResult(car.car_id, score, True, "ok")
 
 
-def pick_car(cars: list[CarState], call: CallRequest) -> ScoreResult | None:
-    results = [score_car(c, call) for c in cars]
+def pick_car(
+    cars: list[CarState], call: CallRequest, allow_passed_pickup: bool = False
+) -> ScoreResult | None:
+    results = [
+        score_car(c, call, allow_passed_pickup=allow_passed_pickup) for c in cars
+    ]
     accepted = [r for r in results if r.accepted]
     if not accepted:
         return None

@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.models import Building, CallTicket, DispatchLog, ElevatorCar
 from app.schemas.schemas import (
     BuildingOut,
+    BuildingUpdate,
     CallCreate,
     CallOut,
     CarOut,
@@ -26,6 +27,18 @@ def health():
 @api_router.get("/buildings", response_model=list[BuildingOut])
 def buildings(db: Session = Depends(get_db)):
     return db.scalars(select(Building).order_by(Building.id)).all()
+
+
+@api_router.patch("/buildings/{building_id}", response_model=BuildingOut)
+def update_building(building_id: int, body: BuildingUpdate, db: Session = Depends(get_db)):
+    b = db.get(Building, building_id)
+    if not b:
+        raise HTTPException(404, "楼栋不存在")
+    if body.allow_passed_pickup is not None:
+        b.allow_passed_pickup = body.allow_passed_pickup
+    db.commit()
+    db.refresh(b)
+    return b
 
 
 @api_router.get("/cars", response_model=list[CarOut])
@@ -73,7 +86,9 @@ def dispatch(body: DispatchRequest, db: Session = Depends(get_db)):
         CarState(c.id, c.floor, c.direction, c.load, c.capacity) for c in car_rows
     ]
     call = CallRequest(ticket.id, ticket.floor, ticket.direction, ticket.passengers)
-    best = pick_car(cars, call)
+    building = db.get(Building, ticket.building_id)
+    allow_passed_pickup = bool(building and building.allow_passed_pickup)
+    best = pick_car(cars, call, allow_passed_pickup=allow_passed_pickup)
     if best is None:
         db.add(DispatchLog(call_id=ticket.id, car_id=None, detail="全部轿厢满员，拒绝派工"))
         ticket.status = "rejected"
@@ -88,11 +103,16 @@ def dispatch(body: DispatchRequest, db: Session = Depends(get_db)):
     car.load += ticket.passengers
     car.floor = ticket.floor
     car.direction = ticket.direction
+    penalty_note = (
+        "已关闭已过站扣分（允许已过站接驳）"
+        if allow_passed_pickup
+        else "已过站扣分开启（默认）"
+    )
     db.add(
         DispatchLog(
             call_id=ticket.id,
             car_id=car.id,
-            detail=f"派予 {car.label}，评分 {best.score:.1f}（同向/距离综合）",
+            detail=f"派予 {car.label}，评分 {best.score:.1f}（同向/距离综合）；本次{penalty_note}",
         )
     )
     db.commit()
